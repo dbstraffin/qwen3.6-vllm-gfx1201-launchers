@@ -894,7 +894,11 @@ kvoff_reap_orphans() {
       continue   # no way to prove it is unused; leave it alone
     fi
     echo "[gc] reaping orphaned shm region $(basename "$f") ($(( $(stat -c %s "$f") / 1024 / 1024 )) MiB)" >&2
-    gc_do rm -f -- "$f"
+    # The region is created root-owned (mode 600) by the privileged container while /dev/shm
+    # is sticky, so a plain rm fails with EPERM when the launcher runs unprivileged (measured
+    # 2026-09-12: 16 GiB stale region survived GC and the next boot found the tmpfs full).
+    # Retry via non-interactive sudo; without it this is a no-op and the failure stays loud.
+    gc_do rm -f -- "$f" || sudo -n rm -f -- "$f"
   done
   shopt -u nullglob
 }
